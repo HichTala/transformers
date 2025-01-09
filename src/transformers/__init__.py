@@ -388,6 +388,7 @@ _import_structure = {
     "models.deprecated.xlm_prophetnet": ["XLMProphetNetConfig"],
     "models.depth_anything": ["DepthAnythingConfig"],
     "models.detr": ["DetrConfig"],
+    "models.diffusiondet": ["DiffusionDetConfig"],
     "models.dialogpt": [],
     "models.dinat": ["DinatConfig"],
     "models.dinov2": ["Dinov2Config"],

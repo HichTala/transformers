@@ -73,6 +73,7 @@ else:
             ("depth_anything", ("DPTImageProcessor",)),
             ("deta", ("DetaImageProcessor",)),
             ("detr", ("DetrImageProcessor", "DetrImageProcessorFast")),
+            ("diffusiondet", ("DiffusionDetImageProcessor",)),
             ("dinat", ("ViTImageProcessor", "ViTImageProcessorFast")),
             ("dinov2", ("BitImageProcessor",)),
             ("donut-swin", ("DonutImageProcessor",)),

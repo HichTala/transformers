@@ -10,6 +10,7 @@ from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork
 from transformers import PreTrainedModel
 
 from transformers.utils.backbone_utils import load_backbone
+from .configuration_diffusiondet import DiffusionDetConfig
 
 from .head import HeadDynamicK
 from .loss import CriterionDynamicK
@@ -47,9 +48,10 @@ class DiffusionDet(PreTrainedModel):
     """
     Implement DiffusionDet
     """
+    config_class = DiffusionDetConfig
 
     def __init__(self, config):
-        super(DiffusionDet, self).__init__()
+        super(DiffusionDet, self).__init__(config)
 
         self.in_features = config.roi_head_in_features
         self.num_classes = config.num_labels
@@ -66,7 +68,6 @@ class DiffusionDet(PreTrainedModel):
         # build diffusion
         betas = cosine_beta_schedule(1000)
         alphas_cumprod = torch.cumprod(1 - betas, dim=0)
-        alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.)
 
         timesteps, = betas.shape
         sampling_timesteps = config.sample_step
@@ -132,8 +133,8 @@ class DiffusionDet(PreTrainedModel):
 
     @torch.no_grad()
     def ddim_sample(self, batched_inputs, backbone_feats, images_whwh):
-        bs = len(batched_inputs['pixel_values'])
-        image_sizes = batched_inputs['pixel_values'].shape
+        bs = len(batched_inputs)
+        image_sizes = batched_inputs.shape
         shape = (bs, self.num_proposals, 4)
 
         # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
@@ -198,11 +199,12 @@ class DiffusionDet(PreTrainedModel):
                 scores_per_image = scores_per_image[keep]
                 labels_per_image = labels_per_image[keep]
 
-            return {
-                'pred_boxes': box_pred_per_image,
-                'scores': scores_per_image,
-                'pred_classes': labels_per_image
-            }
+            return None, scores_per_image, labels_per_image
+            # return {
+            #     'pred_boxes': box_pred_per_image,
+            #     'scores': scores_per_image,
+            #     'pred_classes': labels_per_image
+            # }
         else:
             return self.inference(outputs_class[-1], outputs_coord[-1])
 
@@ -215,11 +217,11 @@ class DiffusionDet(PreTrainedModel):
 
         return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
-    def forward(self, x):
+    def forward(self, pixel_values, labels):
         """
         Args:
         """
-        images = x['pixel_values'].to(self.device)
+        images = pixel_values.to(self.device)
         images_whwh = list()
         for image in images:
             h, w = image.shape[-2:]
@@ -233,29 +235,30 @@ class DiffusionDet(PreTrainedModel):
         features = self.fpn(features)  # [144, 72, 36, 18]
         features = [features[f] for f in features.keys()]
 
-        if not self.training:
-            return self.ddim_sample(x, features, images_whwh)
+        # if not self.training:
+        #     return self.ddim_sample(pixel_values, features, images_whwh)
 
-        if self.training:
-            labels = list(map(lambda tensor: tensor.to(self.device), x['labels']))
-            targets, x_boxes, noises, ts = self.prepare_targets(labels)
+        # if self.training:
+        labels = list(map(lambda tensor: tensor.to(self.device), labels))
+        targets, x_boxes, noises, ts = self.prepare_targets(labels)
 
-            ts = ts.squeeze(-1)
-            x_boxes = x_boxes * images_whwh[:, None, :]
+        ts = ts.squeeze(-1)
+        x_boxes = x_boxes * images_whwh[:, None, :]
 
-            outputs_class, outputs_coord = self.head(features, x_boxes, ts)
-            output = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}
+        outputs_class, outputs_coord = self.head(features, x_boxes, ts)
+        output = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}
 
-            if self.deep_supervision:
-                output['aux_outputs'] = [{'pred_logits': a, 'pred_boxes': b}
-                                         for a, b in zip(outputs_class[:-1], outputs_coord[:-1])]
+        if self.deep_supervision:
+            output['aux_outputs'] = [{'pred_logits': a, 'pred_boxes': b}
+                                     for a, b in zip(outputs_class[:-1], outputs_coord[:-1])]
 
-            loss_dict = self.criterion(output, targets)
-            weight_dict = self.criterion.weight_dict
-            for k in loss_dict.keys():
-                if k in weight_dict:
-                    loss_dict[k] *= weight_dict[k]
-            return loss_dict
+        loss_dict = self.criterion(output, targets)
+        weight_dict = self.criterion.weight_dict
+        for k in loss_dict.keys():
+            if k in weight_dict:
+                loss_dict[k] *= weight_dict[k]
+        loss_dict['loss'] = sum([loss_dict[k] for k in weight_dict.keys()])
+        return loss_dict
 
     def prepare_diffusion_concat(self, gt_boxes):
         """
@@ -337,6 +340,8 @@ class DiffusionDet(PreTrainedModel):
             results (List[Instances]): a list of #images elements.
         """
         results = []
+        logits_output = []
+        labels_output = []
 
         if self.use_focal or self.use_fed_loss:
             scores = torch.sigmoid(box_cls)
@@ -365,6 +370,8 @@ class DiffusionDet(PreTrainedModel):
                     "scores": scores_per_image,
                     "pred_classes": labels_per_image
                 })
+                logits_output.append(scores_per_image)
+                labels_output.append(labels_per_image)
         else:
             # For each box we assign the best class or the second best if the best on is `no_object`.
             scores, labels = F.softmax(box_cls, dim=-1)[:, :, :-1].max(-1)
@@ -386,5 +393,7 @@ class DiffusionDet(PreTrainedModel):
                     "scores": scores_per_image,
                     "pred_classes": labels_per_image
                 })
+                logits_output.append(scores_per_image)
+                labels_output.append(labels_per_image)
 
-        return results
+        return None, logits_output, labels_output

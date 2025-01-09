@@ -7,11 +7,9 @@ from ...utils import logging, PushToHubMixin
 
 logger = logging.get_logger(__name__)
 
-CONFIG_NAME = "config.json"
-
 class DiffusionDetConfig(PretrainedConfig):
 
-    config_name = CONFIG_NAME
+    model_type = "diffusiondet"
 
     def __init__(
             self,
