@@ -1,6 +1,8 @@
 import math
 import random
 from collections import namedtuple, OrderedDict
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -14,6 +16,8 @@ from .configuration_diffusiondet import DiffusionDetConfig
 
 from .head import HeadDynamicK
 from .loss import CriterionDynamicK
+
+from ...utils import ModelOutput
 
 ModelPrediction = namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
@@ -43,12 +47,23 @@ def cosine_beta_schedule(timesteps, s=0.008):
     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
     return torch.clip(betas, 0, 0.999)
 
+@dataclass
+class DiffusionDetOutput(ModelOutput):
+    """
+    Output type of DiffusionDet.
+    """
+
+    loss: Optional[torch.FloatTensor] = None
+    loss_dict: Optional[Dict] = None
+    logits: torch.FloatTensor = None
+    pred_boxes: torch.FloatTensor = None
 
 class DiffusionDet(PreTrainedModel):
     """
     Implement DiffusionDet
     """
     config_class = DiffusionDetConfig
+    main_input_name = "pixel_values"
 
     def __init__(self, config):
         super(DiffusionDet, self).__init__(config)
@@ -258,7 +273,12 @@ class DiffusionDet(PreTrainedModel):
             if k in weight_dict:
                 loss_dict[k] *= weight_dict[k]
         loss_dict['loss'] = sum([loss_dict[k] for k in weight_dict.keys()])
-        return loss_dict
+        return DiffusionDetOutput(
+            loss=loss_dict['loss'],
+            loss_dict=loss_dict,
+            logits=output['pred_logits'],
+            pred_boxes=output['pred_boxes']
+        )
 
     def prepare_diffusion_concat(self, gt_boxes):
         """
