@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Image processor class for Conditional DETR."""
+"""Image processor class for Deformable DETR."""
 
 import io
 import pathlib
@@ -20,10 +20,9 @@ from collections import defaultdict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import numpy as np
-
-from ...feature_extraction_utils import BatchFeature
-from ...image_processing_utils import BaseImageProcessor, get_size_dict
-from ...image_transforms import (
+from transformers.feature_extraction_utils import BatchFeature
+from transformers.image_processing_utils import BaseImageProcessor, get_size_dict
+from transformers.image_transforms import (
     PaddingMode,
     center_to_corners_format,
     corners_to_center_format,
@@ -34,7 +33,8 @@ from ...image_transforms import (
     rgb_to_id,
     to_channel_dimension_format,
 )
-from ...image_utils import (
+
+from transformers.image_utils import (
     IMAGENET_DEFAULT_MEAN,
     IMAGENET_DEFAULT_STD,
     AnnotationFormat,
@@ -50,19 +50,22 @@ from ...image_utils import (
     valid_images,
     validate_annotations,
     validate_kwargs,
-    validate_preprocess_arguments,
+    validate_preprocess_arguments
 )
-from ...utils import (
+
+from transformers.utils import (
     TensorType,
     is_flax_available,
     is_jax_tensor,
-    is_scipy_available,
     is_tf_available,
     is_tf_tensor,
-    is_torch_available,
     is_torch_tensor,
-    is_vision_available,
-    logging,
+    is_vision_available
+)
+from ...utils import (
+    is_torch_available,
+    is_scipy_available,
+    logging
 )
 
 
@@ -70,18 +73,14 @@ if is_torch_available():
     import torch
     from torch import nn
 
-
 if is_vision_available():
     import PIL
-
 
 if is_scipy_available():
     import scipy.special
     import scipy.stats
 
-
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
-
 
 SUPPORTED_ANNOTATION_FORMATS = (AnnotationFormat.COCO_DETECTION, AnnotationFormat.COCO_PANOPTIC)
 
@@ -326,7 +325,7 @@ def convert_coco_poly_to_mask(segmentations, height: int, width: int) -> np.ndar
     return masks
 
 
-# Copied from transformers.models.detr.image_processing_detr.prepare_coco_detection_annotation with DETR->ConditionalDetr
+# Copied from transformers.models.detr.image_processing_detr.prepare_coco_detection_annotation with DETR->DeformableDetr
 def prepare_coco_detection_annotation(
     image,
     target,
@@ -334,7 +333,7 @@ def prepare_coco_detection_annotation(
     input_data_format: Optional[Union[ChannelDimension, str]] = None,
 ):
     """
-    Convert the target in COCO format into the format expected by ConditionalDetr.
+    Convert the target in COCO format into the format expected by DeformableDetr.
     """
     image_height, image_width = get_image_size(image, channel_dim=input_data_format)
 
@@ -422,7 +421,7 @@ def masks_to_boxes(masks: np.ndarray) -> np.ndarray:
     return np.stack([x_min, y_min, x_max, y_max], 1)
 
 
-# Copied from transformers.models.detr.image_processing_detr.prepare_coco_panoptic_annotation with DETR->ConditionalDetr
+# Copied from transformers.models.detr.image_processing_detr.prepare_coco_panoptic_annotation with DETR->DeformableDetr
 def prepare_coco_panoptic_annotation(
     image: np.ndarray,
     target: Dict,
@@ -431,7 +430,7 @@ def prepare_coco_panoptic_annotation(
     input_data_format: Union[ChannelDimension, str] = None,
 ) -> Dict:
     """
-    Prepare a coco panoptic annotation for ConditionalDetr.
+    Prepare a coco panoptic annotation for DeformableDetr.
     """
     image_height, image_width = get_image_size(image, channel_dim=input_data_format)
     annotation_path = pathlib.Path(masks_path) / target["file_name"]
@@ -509,7 +508,7 @@ def score_labels_from_class_probabilities(logits: np.ndarray) -> Tuple[np.ndarra
     return scores, labels
 
 
-# Copied from transformers.models.detr.image_processing_detr.post_process_panoptic_sample with DetrForSegmentation->ConditionalDetrForSegmentation
+# Copied from transformers.models.detr.image_processing_detr.post_process_panoptic_sample
 def post_process_panoptic_sample(
     out_logits: np.ndarray,
     masks: np.ndarray,
@@ -520,7 +519,7 @@ def post_process_panoptic_sample(
     threshold=0.85,
 ) -> Dict:
     """
-    Converts the output of [`ConditionalDetrForSegmentation`] into panoptic segmentation predictions for a single sample.
+    Converts the output of [`DetrForSegmentation`] into panoptic segmentation predictions for a single sample.
 
     Args:
         out_logits (`torch.Tensor`):
@@ -801,9 +800,9 @@ def compute_segments(
     return segmentation, segments
 
 
-class ConditionalDetrImageProcessor(BaseImageProcessor):
+class DiffusionDetImageProcessor(BaseImageProcessor):
     r"""
-    Constructs a Conditional Detr image processor.
+    Constructs a Deformable DETR image processor.
 
     Args:
         format (`str`, *optional*, defaults to `"coco_detection"`):
@@ -928,11 +927,11 @@ class ConditionalDetrImageProcessor(BaseImageProcessor):
         ]
 
     @classmethod
-    # Copied from transformers.models.detr.image_processing_detr.DetrImageProcessor.from_dict with Detr->ConditionalDetr
+    # Copied from transformers.models.detr.image_processing_detr.DetrImageProcessor.from_dict with Detr->DeformableDetr
     def from_dict(cls, image_processor_dict: Dict[str, Any], **kwargs):
         """
         Overrides the `from_dict` method from the base class to make sure parameters are updated if image processor is
-        created using from_dict and kwargs e.g. `ConditionalDetrImageProcessor.from_pretrained(checkpoint, size=600,
+        created using from_dict and kwargs e.g. `DeformableDetrImageProcessor.from_pretrained(checkpoint, size=600,
         max_size=800)`
         """
         image_processor_dict = image_processor_dict.copy()
@@ -942,7 +941,7 @@ class ConditionalDetrImageProcessor(BaseImageProcessor):
             image_processor_dict["pad_and_return_pixel_mask"] = kwargs.pop("pad_and_return_pixel_mask")
         return super().from_dict(image_processor_dict, **kwargs)
 
-    # Copied from transformers.models.detr.image_processing_detr.DetrImageProcessor.prepare_annotation with DETR->ConditionalDetr
+    # Copied from transformers.models.detr.image_processing_detr.DetrImageProcessor.prepare_annotation with DETR->DeformableDetr
     def prepare_annotation(
         self,
         image: np.ndarray,
@@ -953,7 +952,7 @@ class ConditionalDetrImageProcessor(BaseImageProcessor):
         input_data_format: Optional[Union[str, ChannelDimension]] = None,
     ) -> Dict:
         """
-        Prepare an annotation for feeding into ConditionalDetr model.
+        Prepare an annotation for feeding into DeformableDetr model.
         """
         format = format if format is not None else self.format
 
@@ -1433,7 +1432,7 @@ class ConditionalDetrImageProcessor(BaseImageProcessor):
         # All transformations expect numpy arrays
         images = [to_numpy_array(image) for image in images]
 
-        if do_rescale and is_scaled_image(images[0]):
+        if is_scaled_image(images[0]) and do_rescale:
             logger.warning_once(
                 "It looks like you are trying to rescale already rescaled images. If the input"
                 " images have pixel values between 0 and 1, set `do_rescale=False` to avoid rescaling them again."
@@ -1527,21 +1526,21 @@ class ConditionalDetrImageProcessor(BaseImageProcessor):
     # POSTPROCESSING METHODS - TODO: add support for other frameworks
     def post_process(self, outputs, target_sizes):
         """
-        Converts the output of [`ConditionalDetrForObjectDetection`] into the format expected by the Pascal VOC format (xmin, ymin, xmax, ymax).
-        Only supports PyTorch.
+        Converts the raw output of [`DeformableDetrForObjectDetection`] into final bounding boxes in (top_left_x,
+        top_left_y, bottom_right_x, bottom_right_y) format. Only supports PyTorch.
 
         Args:
-            outputs ([`ConditionalDetrObjectDetectionOutput`]):
+            outputs ([`DeformableDetrObjectDetectionOutput`]):
                 Raw outputs of the model.
             target_sizes (`torch.Tensor` of shape `(batch_size, 2)`):
-                Tensor containing the size (h, w) of each image of the batch. For evaluation, this must be the original
-                image size (before any data augmentation). For visualization, this should be the image size after data
-                augment, but before padding.
+                Tensor containing the size (height, width) of each image of the batch. For evaluation, this must be the
+                original image size (before any data augmentation). For visualization, this should be the image size
+                after data augment, but before padding.
         Returns:
             `List[Dict]`: A list of dictionaries, each dictionary containing the scores, labels and boxes for an image
             in the batch as predicted by the model.
         """
-        logging.warning_once(
+        logger.warning_once(
             "`post_process` is deprecated and will be removed in v5 of Transformers, please use"
             " `post_process_object_detection` instead, with `threshold=0.` for equivalent results.",
         )
@@ -1554,7 +1553,7 @@ class ConditionalDetrImageProcessor(BaseImageProcessor):
             raise ValueError("Each element of target_sizes must contain the size (h, w) of each image of the batch")
 
         prob = out_logits.sigmoid()
-        topk_values, topk_indexes = torch.topk(prob.view(out_logits.shape[0], -1), 300, dim=1)
+        topk_values, topk_indexes = torch.topk(prob.view(out_logits.shape[0], -1), 100, dim=1)
         scores = topk_values
         topk_boxes = torch.div(topk_indexes, out_logits.shape[2], rounding_mode="floor")
         labels = topk_indexes % out_logits.shape[2]
@@ -1570,12 +1569,11 @@ class ConditionalDetrImageProcessor(BaseImageProcessor):
 
         return results
 
-    # Copied from transformers.models.deformable_detr.image_processing_deformable_detr.DeformableDetrImageProcessor.post_process_object_detection with DeformableDetr->ConditionalDetr
     def post_process_object_detection(
         self, outputs, threshold: float = 0.5, target_sizes: Union[TensorType, List[Tuple]] = None, top_k: int = 100
     ):
         """
-        Converts the raw output of [`ConditionalDetrForObjectDetection`] into final bounding boxes in (top_left_x,
+        Converts the raw output of [`DeformableDetrForObjectDetection`] into final bounding boxes in (top_left_x,
         top_left_y, bottom_right_x, bottom_right_y) format. Only supports PyTorch.
 
         Args:
@@ -1630,226 +1628,5 @@ class ConditionalDetrImageProcessor(BaseImageProcessor):
 
         return results
 
-    # Copied from transformers.models.detr.image_processing_detr.DetrImageProcessor.post_process_semantic_segmentation with Detr->ConditionalDetr
-    def post_process_semantic_segmentation(self, outputs, target_sizes: List[Tuple[int, int]] = None):
-        """
-        Converts the output of [`ConditionalDetrForSegmentation`] into semantic segmentation maps. Only supports PyTorch.
 
-        Args:
-            outputs ([`ConditionalDetrForSegmentation`]):
-                Raw outputs of the model.
-            target_sizes (`List[Tuple[int, int]]`, *optional*):
-                A list of tuples (`Tuple[int, int]`) containing the target size (height, width) of each image in the
-                batch. If unset, predictions will not be resized.
-        Returns:
-            `List[torch.Tensor]`:
-                A list of length `batch_size`, where each item is a semantic segmentation map of shape (height, width)
-                corresponding to the target_sizes entry (if `target_sizes` is specified). Each entry of each
-                `torch.Tensor` correspond to a semantic class id.
-        """
-        class_queries_logits = outputs.logits  # [batch_size, num_queries, num_classes+1]
-        masks_queries_logits = outputs.pred_masks  # [batch_size, num_queries, height, width]
-
-        # Remove the null class `[..., :-1]`
-        masks_classes = class_queries_logits.softmax(dim=-1)[..., :-1]
-        masks_probs = masks_queries_logits.sigmoid()  # [batch_size, num_queries, height, width]
-
-        # Semantic segmentation logits of shape (batch_size, num_classes, height, width)
-        segmentation = torch.einsum("bqc, bqhw -> bchw", masks_classes, masks_probs)
-        batch_size = class_queries_logits.shape[0]
-
-        # Resize logits and compute semantic segmentation maps
-        if target_sizes is not None:
-            if batch_size != len(target_sizes):
-                raise ValueError(
-                    "Make sure that you pass in as many target sizes as the batch dimension of the logits"
-                )
-
-            semantic_segmentation = []
-            for idx in range(batch_size):
-                resized_logits = nn.functional.interpolate(
-                    segmentation[idx].unsqueeze(dim=0), size=target_sizes[idx], mode="bilinear", align_corners=False
-                )
-                semantic_map = resized_logits[0].argmax(dim=0)
-                semantic_segmentation.append(semantic_map)
-        else:
-            semantic_segmentation = segmentation.argmax(dim=1)
-            semantic_segmentation = [semantic_segmentation[i] for i in range(semantic_segmentation.shape[0])]
-
-        return semantic_segmentation
-
-    # Copied from transformers.models.detr.image_processing_detr.DetrImageProcessor.post_process_instance_segmentation with Detr->ConditionalDetr
-    def post_process_instance_segmentation(
-        self,
-        outputs,
-        threshold: float = 0.5,
-        mask_threshold: float = 0.5,
-        overlap_mask_area_threshold: float = 0.8,
-        target_sizes: Optional[List[Tuple[int, int]]] = None,
-        return_coco_annotation: Optional[bool] = False,
-    ) -> List[Dict]:
-        """
-        Converts the output of [`ConditionalDetrForSegmentation`] into instance segmentation predictions. Only supports PyTorch.
-
-        Args:
-            outputs ([`ConditionalDetrForSegmentation`]):
-                Raw outputs of the model.
-            threshold (`float`, *optional*, defaults to 0.5):
-                The probability score threshold to keep predicted instance masks.
-            mask_threshold (`float`, *optional*, defaults to 0.5):
-                Threshold to use when turning the predicted masks into binary values.
-            overlap_mask_area_threshold (`float`, *optional*, defaults to 0.8):
-                The overlap mask area threshold to merge or discard small disconnected parts within each binary
-                instance mask.
-            target_sizes (`List[Tuple]`, *optional*):
-                List of length (batch_size), where each list item (`Tuple[int, int]]`) corresponds to the requested
-                final size (height, width) of each prediction. If unset, predictions will not be resized.
-            return_coco_annotation (`bool`, *optional*):
-                Defaults to `False`. If set to `True`, segmentation maps are returned in COCO run-length encoding (RLE)
-                format.
-        Returns:
-            `List[Dict]`: A list of dictionaries, one per image, each dictionary containing two keys:
-            - **segmentation** -- A tensor of shape `(height, width)` where each pixel represents a `segment_id` or
-              `List[List]` run-length encoding (RLE) of the segmentation map if return_coco_annotation is set to
-              `True`. Set to `None` if no mask if found above `threshold`.
-            - **segments_info** -- A dictionary that contains additional information on each segment.
-                - **id** -- An integer representing the `segment_id`.
-                - **label_id** -- An integer representing the label / semantic class id corresponding to `segment_id`.
-                - **score** -- Prediction score of segment with `segment_id`.
-        """
-        class_queries_logits = outputs.logits  # [batch_size, num_queries, num_classes+1]
-        masks_queries_logits = outputs.pred_masks  # [batch_size, num_queries, height, width]
-
-        batch_size = class_queries_logits.shape[0]
-        num_labels = class_queries_logits.shape[-1] - 1
-
-        mask_probs = masks_queries_logits.sigmoid()  # [batch_size, num_queries, height, width]
-
-        # Predicted label and score of each query (batch_size, num_queries)
-        pred_scores, pred_labels = nn.functional.softmax(class_queries_logits, dim=-1).max(-1)
-
-        # Loop over items in batch size
-        results: List[Dict[str, TensorType]] = []
-
-        for i in range(batch_size):
-            mask_probs_item, pred_scores_item, pred_labels_item = remove_low_and_no_objects(
-                mask_probs[i], pred_scores[i], pred_labels[i], threshold, num_labels
-            )
-
-            # No mask found
-            if mask_probs_item.shape[0] <= 0:
-                height, width = target_sizes[i] if target_sizes is not None else mask_probs_item.shape[1:]
-                segmentation = torch.zeros((height, width)) - 1
-                results.append({"segmentation": segmentation, "segments_info": []})
-                continue
-
-            # Get segmentation map and segment information of batch item
-            target_size = target_sizes[i] if target_sizes is not None else None
-            segmentation, segments = compute_segments(
-                mask_probs=mask_probs_item,
-                pred_scores=pred_scores_item,
-                pred_labels=pred_labels_item,
-                mask_threshold=mask_threshold,
-                overlap_mask_area_threshold=overlap_mask_area_threshold,
-                label_ids_to_fuse=[],
-                target_size=target_size,
-            )
-
-            # Return segmentation map in run-length encoding (RLE) format
-            if return_coco_annotation:
-                segmentation = convert_segmentation_to_rle(segmentation)
-
-            results.append({"segmentation": segmentation, "segments_info": segments})
-        return results
-
-    # Copied from transformers.models.detr.image_processing_detr.DetrImageProcessor.post_process_panoptic_segmentation with Detr->ConditionalDetr
-    def post_process_panoptic_segmentation(
-        self,
-        outputs,
-        threshold: float = 0.5,
-        mask_threshold: float = 0.5,
-        overlap_mask_area_threshold: float = 0.8,
-        label_ids_to_fuse: Optional[Set[int]] = None,
-        target_sizes: Optional[List[Tuple[int, int]]] = None,
-    ) -> List[Dict]:
-        """
-        Converts the output of [`ConditionalDetrForSegmentation`] into image panoptic segmentation predictions. Only supports
-        PyTorch.
-
-        Args:
-            outputs ([`ConditionalDetrForSegmentation`]):
-                The outputs from [`ConditionalDetrForSegmentation`].
-            threshold (`float`, *optional*, defaults to 0.5):
-                The probability score threshold to keep predicted instance masks.
-            mask_threshold (`float`, *optional*, defaults to 0.5):
-                Threshold to use when turning the predicted masks into binary values.
-            overlap_mask_area_threshold (`float`, *optional*, defaults to 0.8):
-                The overlap mask area threshold to merge or discard small disconnected parts within each binary
-                instance mask.
-            label_ids_to_fuse (`Set[int]`, *optional*):
-                The labels in this state will have all their instances be fused together. For instance we could say
-                there can only be one sky in an image, but several persons, so the label ID for sky would be in that
-                set, but not the one for person.
-            target_sizes (`List[Tuple]`, *optional*):
-                List of length (batch_size), where each list item (`Tuple[int, int]]`) corresponds to the requested
-                final size (height, width) of each prediction in batch. If unset, predictions will not be resized.
-        Returns:
-            `List[Dict]`: A list of dictionaries, one per image, each dictionary containing two keys:
-            - **segmentation** -- a tensor of shape `(height, width)` where each pixel represents a `segment_id` or
-              `None` if no mask if found above `threshold`. If `target_sizes` is specified, segmentation is resized to
-              the corresponding `target_sizes` entry.
-            - **segments_info** -- A dictionary that contains additional information on each segment.
-                - **id** -- an integer representing the `segment_id`.
-                - **label_id** -- An integer representing the label / semantic class id corresponding to `segment_id`.
-                - **was_fused** -- a boolean, `True` if `label_id` was in `label_ids_to_fuse`, `False` otherwise.
-                  Multiple instances of the same class / label were fused and assigned a single `segment_id`.
-                - **score** -- Prediction score of segment with `segment_id`.
-        """
-
-        if label_ids_to_fuse is None:
-            logger.warning_once("`label_ids_to_fuse` unset. No instance will be fused.")
-            label_ids_to_fuse = set()
-
-        class_queries_logits = outputs.logits  # [batch_size, num_queries, num_classes+1]
-        masks_queries_logits = outputs.pred_masks  # [batch_size, num_queries, height, width]
-
-        batch_size = class_queries_logits.shape[0]
-        num_labels = class_queries_logits.shape[-1] - 1
-
-        mask_probs = masks_queries_logits.sigmoid()  # [batch_size, num_queries, height, width]
-
-        # Predicted label and score of each query (batch_size, num_queries)
-        pred_scores, pred_labels = nn.functional.softmax(class_queries_logits, dim=-1).max(-1)
-
-        # Loop over items in batch size
-        results: List[Dict[str, TensorType]] = []
-
-        for i in range(batch_size):
-            mask_probs_item, pred_scores_item, pred_labels_item = remove_low_and_no_objects(
-                mask_probs[i], pred_scores[i], pred_labels[i], threshold, num_labels
-            )
-
-            # No mask found
-            if mask_probs_item.shape[0] <= 0:
-                height, width = target_sizes[i] if target_sizes is not None else mask_probs_item.shape[1:]
-                segmentation = torch.zeros((height, width)) - 1
-                results.append({"segmentation": segmentation, "segments_info": []})
-                continue
-
-            # Get segmentation map and segment information of batch item
-            target_size = target_sizes[i] if target_sizes is not None else None
-            segmentation, segments = compute_segments(
-                mask_probs=mask_probs_item,
-                pred_scores=pred_scores_item,
-                pred_labels=pred_labels_item,
-                mask_threshold=mask_threshold,
-                overlap_mask_area_threshold=overlap_mask_area_threshold,
-                label_ids_to_fuse=label_ids_to_fuse,
-                target_size=target_size,
-            )
-
-            results.append({"segmentation": segmentation, "segments_info": segments})
-        return results
-
-
-__all__ = ["ConditionalDetrImageProcessor"]
+__all__ = ["DiffusionDetImageProcessor"]
