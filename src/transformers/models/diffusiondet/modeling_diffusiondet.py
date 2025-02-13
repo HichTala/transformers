@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from torchvision import ops
 from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork
 from transformers import PreTrainedModel
+import wandb
 
 from transformers.utils.backbone_utils import load_backbone
 from .configuration_diffusiondet import DiffusionDetConfig
@@ -273,6 +274,14 @@ class DiffusionDet(PreTrainedModel):
             if k in weight_dict:
                 loss_dict[k] *= weight_dict[k]
         loss_dict['loss'] = sum([loss_dict[k] for k in weight_dict.keys()])
+
+        wandb_logs_values = ["loss_ce", "loss_bbox", "loss_giou"]
+
+        if self.training:
+            wandb.log({f'train/{k}': v.detach().cpu().numpy() for k, v in loss_dict.items() if k in wandb_logs_values})
+        else:
+            wandb.log({f'eval/{k}': v.detach().cpu().numpy() for k, v in loss_dict.items() if k in wandb_logs_values})
+
         return DiffusionDetOutput(
             loss=loss_dict['loss'],
             loss_dict=loss_dict,
