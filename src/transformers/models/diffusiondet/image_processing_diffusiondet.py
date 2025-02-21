@@ -802,7 +802,7 @@ def compute_segments(
 
 class DiffusionDetImageProcessor(BaseImageProcessor):
     r"""
-    Constructs a Deformable DETR image processor.
+    Constructs a DiffusionDet image processor.
 
     Args:
         format (`str`, *optional*, defaults to `"coco_detection"`):
@@ -1573,7 +1573,7 @@ class DiffusionDetImageProcessor(BaseImageProcessor):
         self, outputs, threshold: float = 0.5, target_sizes: Union[TensorType, List[Tuple]] = None, top_k: int = 100
     ):
         """
-        Converts the raw output of [`DeformableDetrForObjectDetection`] into final bounding boxes in (top_left_x,
+        Converts the raw output of [`DiffusionDet`] into final bounding boxes in (top_left_x,
         top_left_y, bottom_right_x, bottom_right_y) format. Only supports PyTorch.
 
         Args:
