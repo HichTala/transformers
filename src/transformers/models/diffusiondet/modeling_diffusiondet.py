@@ -57,6 +57,7 @@ class DiffusionDetOutput(ModelOutput):
     loss: Optional[torch.FloatTensor] = None
     loss_dict: Optional[Dict] = None
     logits: torch.FloatTensor = None
+    labels: torch.IntTensor = None
     pred_boxes: torch.FloatTensor = None
 
 class DiffusionDet(PreTrainedModel):
@@ -215,12 +216,7 @@ class DiffusionDet(PreTrainedModel):
                 scores_per_image = scores_per_image[keep]
                 labels_per_image = labels_per_image[keep]
 
-            return None, scores_per_image, labels_per_image
-            # return {
-            #     'pred_boxes': box_pred_per_image,
-            #     'scores': scores_per_image,
-            #     'pred_classes': labels_per_image
-            # }
+            return box_pred_per_image, scores_per_image, labels_per_image
         else:
             return self.inference(outputs_class[-1], outputs_coord[-1])
 
@@ -251,9 +247,6 @@ class DiffusionDet(PreTrainedModel):
         features = self.fpn(features)  # [144, 72, 36, 18]
         features = [features[f] for f in features.keys()]
 
-        # if not self.training:
-        #     return self.ddim_sample(pixel_values, features, images_whwh)
-
         # if self.training:
         labels = list(map(lambda tensor: tensor.to(self.device), labels))
         targets, x_boxes, noises, ts = self.prepare_targets(labels)
@@ -281,6 +274,16 @@ class DiffusionDet(PreTrainedModel):
             wandb.log({f'train/{k}': v.detach().cpu().numpy() for k, v in loss_dict.items() if k in wandb_logs_values})
         else:
             wandb.log({f'eval/{k}': v.detach().cpu().numpy() for k, v in loss_dict.items() if k in wandb_logs_values})
+
+        if not self.training:
+            pred_logits, pred_labels, pred_boxes  = self.ddim_sample(pixel_values, features, images_whwh)
+            return DiffusionDetOutput(
+                loss=loss_dict['loss'],
+                loss_dict=loss_dict,
+                logits=pred_logits,
+                labels=pred_labels,
+                pred_boxes=pred_boxes,
+            )
 
         return DiffusionDetOutput(
             loss=loss_dict['loss'],
@@ -369,6 +372,7 @@ class DiffusionDet(PreTrainedModel):
             results (List[Instances]): a list of #images elements.
         """
         results = []
+        boxes_output = []
         logits_output = []
         labels_output = []
 
@@ -394,11 +398,7 @@ class DiffusionDet(PreTrainedModel):
                     scores_per_image = scores_per_image[keep]
                     labels_per_image = labels_per_image[keep]
 
-                results.append({
-                    "pred_boxes": box_pred_per_image,
-                    "scores": scores_per_image,
-                    "pred_classes": labels_per_image
-                })
+                boxes_output.append(box_pred_per_image)
                 logits_output.append(scores_per_image)
                 labels_output.append(labels_per_image)
         else:
@@ -417,12 +417,8 @@ class DiffusionDet(PreTrainedModel):
                     scores_per_image = scores_per_image[keep]
                     labels_per_image = labels_per_image[keep]
 
-                results.append({
-                    "pred_boxes": box_pred_per_image,
-                    "scores": scores_per_image,
-                    "pred_classes": labels_per_image
-                })
+                boxes_output.append(box_pred_per_image)
                 logits_output.append(scores_per_image)
                 labels_output.append(labels_per_image)
 
-        return None, logits_output, labels_output
+        return boxes_output, logits_output, labels_output
