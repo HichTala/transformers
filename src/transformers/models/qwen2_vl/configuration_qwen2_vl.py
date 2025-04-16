@@ -38,6 +38,7 @@ class Qwen2VLVisionConfig(PretrainedConfig):
         patch_size=14,
         spatial_merge_size=2,
         temporal_patch_size=2,
+        initializer_range=0.02,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -52,6 +53,7 @@ class Qwen2VLVisionConfig(PretrainedConfig):
         self.patch_size = patch_size
         self.spatial_merge_size = spatial_merge_size
         self.temporal_patch_size = temporal_patch_size
+        self.initializer_range = initializer_range
 
 
 class Qwen2VLConfig(PretrainedConfig):
@@ -173,6 +175,11 @@ class Qwen2VLConfig(PretrainedConfig):
         "layers.*.mlp.up_proj": "colwise",
         "layers.*.mlp.down_proj": "rowwise",
     }
+    base_model_pp_plan = {
+        "embed_tokens": (["input_ids"], ["inputs_embeds"]),
+        "layers": (["hidden_states", "attention_mask"], ["hidden_states"]),
+        "norm": (["hidden_states"], ["hidden_states"]),
+    }
 
     def __init__(
         self,
@@ -227,7 +234,7 @@ class Qwen2VLConfig(PretrainedConfig):
 
         # Validate the correctness of rotary position embeddings parameters
         # BC: if there is a 'type' field, move it to 'rope_type'.
-        # and change type from 'mrope' to 'default' because `mrope` does defeault RoPE calculations
+        # and change type from 'mrope' to 'default' because `mrope` does default RoPE calculations
         # one can set it to "linear"/"dynamic" etc. to have scaled RoPE
         # TODO: @raushan update config in the hub
         if self.rope_scaling is not None and "type" in self.rope_scaling:

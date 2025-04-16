@@ -1295,8 +1295,10 @@ class GPTSanJapaneseForConditionalGeneration(GPTSanJapanesePreTrainedModel):
     def prepare_decoder_input_ids_from_labels(self, labels: torch.Tensor):
         return self._shift_right(labels)
 
-    def resize_token_embeddings(self, new_num_tokens: int, pad_to_multiple_of: Optional[int] = None) -> nn.Embedding:
-        new_embeddings = super().resize_token_embeddings(new_num_tokens, pad_to_multiple_of)
+    def resize_token_embeddings(
+        self, new_num_tokens: int, pad_to_multiple_of: Optional[int] = None, mean_resizing: bool = True
+    ) -> nn.Embedding:
+        new_embeddings = super().resize_token_embeddings(new_num_tokens, pad_to_multiple_of, mean_resizing)
         self._resize_final_logits_bias(new_embeddings.weight.shape[0])
         return new_embeddings
 
@@ -1330,3 +1332,6 @@ class GPTSanJapaneseForConditionalGeneration(GPTSanJapanesePreTrainedModel):
                 total_router_logits.append(router_logits)
                 total_expert_indexes.append(expert_indexes)
         return torch.cat(total_router_logits, dim=1), torch.cat(total_expert_indexes, dim=1)
+
+
+__all__ = ["GPTSanJapaneseForConditionalGeneration", "GPTSanJapaneseModel", "GPTSanJapanesePreTrainedModel"]

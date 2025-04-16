@@ -18,8 +18,9 @@
 # to defer the actual importing for when the objects are requested. This way `import transformers` provides the names
 # in the namespace without actually importing anything (and especially none of the backends).
 
-__version__ = "4.49.0.dev0"
+__version__ = "4.52.0.dev0"
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 # Check the dependencies satisfy the minimal versions required.
@@ -400,7 +401,6 @@ _import_structure = {
     "models.deprecated.xlm_prophetnet": ["XLMProphetNetConfig"],
     "models.depth_anything": ["DepthAnythingConfig"],
     "models.detr": ["DetrConfig"],
-    "models.diffusiondet": ["DiffusionDetConfig"],
     "models.dialogpt": [],
     "models.diffllama": ["DiffLlamaConfig"],
     "models.dinat": ["DinatConfig"],

@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright 2024 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,7 +42,7 @@ class GgufQuantizationTests(unittest.TestCase):
     Test cases for weights dequantization with GGUF models.
     Note: The quantization names should keep aligned with `GGMLQuantizationType` in gguf-py:
     https://github.com/ggerganov/llama.cpp/blob/4b0c638b9a68f577cb2066b638c9f622d91ee661/gguf-py/gguf/constants.py#L1545-L1576
-    So quantization like Q4_K_M or Q4_K_S dshouldn't be added to this tests.
+    So quantization like Q4_K_M or Q4_K_S shouldn't be added to this tests.
     """
 
     example_text = "Hello"
@@ -219,6 +218,49 @@ class GgufIntegrationTests(unittest.TestCase):
         EXPECTED_TEXT = "Hello, World!\n\nStep 3: Add"
         self.assertEqual(tokenizer.decode(out[0], skip_special_tokens=True), EXPECTED_TEXT)
 
+    def test_gguf_errors_disk_offload(self):
+        from collections import OrderedDict
+
+        q2_k_gguf_model_id = self.gguf_filename.format(quant_type=QuantType.Q2_K.name)
+        with self.assertRaises(RuntimeError):
+            AutoModelForCausalLM.from_pretrained(
+                self.gguf_model_id,
+                device_map=OrderedDict(
+                    [
+                        ("model.embed_tokens", "cpu"),
+                        ("lm_head", "cpu"),
+                        ("model.layers.0", "cpu"),
+                        ("model.layers.1", "cpu"),
+                        ("model.layers.2", "cpu"),
+                        ("model.layers.3", "cpu"),
+                        ("model.layers.4", "cpu"),
+                        ("model.layers.5", "cpu"),
+                        ("model.layers.6", "cpu"),
+                        ("model.layers.7", "cpu"),
+                        ("model.layers.8", "cpu"),
+                        ("model.layers.9", "cpu"),
+                        ("model.layers.10", "disk"),
+                        ("model.layers.11", "disk"),
+                        ("model.layers.12", "disk"),
+                        ("model.layers.13", "disk"),
+                        ("model.layers.14", "disk"),
+                        ("model.layers.15", "disk"),
+                        ("model.layers.16", "disk"),
+                        ("model.layers.17", "disk"),
+                        ("model.layers.18", "disk"),
+                        ("model.layers.19", "disk"),
+                        ("model.layers.20", "disk"),
+                        ("model.layers.21", "disk"),
+                        ("model.layers.22", "disk"),
+                        ("model.norm", "disk"),
+                        ("model.rotary_emb", "disk"),
+                    ]
+                ),
+                gguf_file=q2_k_gguf_model_id,
+                offload_folder="offload",
+                offload_state_dict=True,
+            )
+
 
 @require_gguf
 @require_torch_gpu
@@ -254,6 +296,10 @@ class GgufModelTests(unittest.TestCase):
     nemotron_model_id = "bartowski/Nemotron-Mini-4B-Instruct-GGUF"
     original_gemma2_model_id = "google/gemma-2-2b-it"
     gemma2_model_id = "bartowski/gemma-2-2b-it-GGUF"
+    original_gemma3_text_model_id = "google/gemma-3-1b-it"
+    original_gemma3_vision_model_id = "google/gemma-3-4b-it"
+    gemma3_text_model_id = "unsloth/gemma-3-1b-it-GGUF"
+    gemma3_vision_model_id = "unsloth/gemma-3-4b-it-GGUF"
 
     q4_0_phi3_model_id = "Phi-3-mini-4k-instruct-q4.gguf"
     q4_0_mistral_model_id = "mistral-7b-instruct-v0.2.Q4_0.gguf"
@@ -283,6 +329,9 @@ class GgufModelTests(unittest.TestCase):
     q3_k_gemma2_model_id = "gemma-2-2b-it-Q3_K_L.gguf"
     q8_0_gemma2_model_id = "gemma-2-2b-it-Q8_0.gguf"
     fp32_gemma2_model_id = "gemma-2-2b-it-f32.gguf"
+    q2_k_gemma3_text_model_id = "gemma-3-1b-it-Q2_K.gguf"
+    bf16_gemma3_text_model_id = "gemma-3-1b-it-BF16.gguf"
+    bf16_gemma3_vision_model_id = "gemma-3-4b-it-BF16.gguf"
 
     example_text = "Hello"
 
@@ -827,6 +876,70 @@ class GgufModelTests(unittest.TestCase):
         converted_model = AutoModelForCausalLM.from_pretrained(
             self.gemma2_model_id,
             gguf_file=self.fp32_gemma2_model_id,
+            torch_dtype=torch.float16,
+        )
+
+        converted_state_dict = converted_model.state_dict()
+        original_state_dict = original_model.state_dict()
+
+        for layer_name, original_params in original_state_dict.items():
+            if layer_name in converted_state_dict:
+                self.assertTrue(original_params.shape == converted_state_dict[layer_name].shape)
+                torch.testing.assert_close(original_params, converted_state_dict[layer_name])
+            else:
+                raise ValueError(f"Layer {layer_name} is not presented in GGUF model")
+
+    @unittest.skipUnless(is_gguf_available("0.16.0"), "test requires gguf version >= 0.16.0")
+    def test_gemma3_text_q2_k(self):
+        model = AutoModelForCausalLM.from_pretrained(
+            self.gemma3_text_model_id,
+            gguf_file=self.q2_k_gemma3_text_model_id,
+            torch_dtype=torch.float16,
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(self.gemma3_text_model_id, gguf_file=self.q2_k_gemma3_text_model_id)
+        text = tokenizer(self.example_text, return_tensors="pt")["input_ids"]
+        out = model.generate(text, max_new_tokens=10)
+
+        EXPECTED_TEXT = "Hello,\n\nI'm looking for a small,"
+        self.assertEqual(tokenizer.decode(out[0], skip_special_tokens=True), EXPECTED_TEXT)
+
+    @require_read_token
+    @unittest.skipUnless(is_gguf_available("0.16.0"), "test requires gguf version >= 0.16.0")
+    def test_gemma3_text_weights_conversion_bf16(self):
+        original_model = AutoModelForCausalLM.from_pretrained(
+            self.original_gemma3_text_model_id,
+            torch_dtype=torch.float16,
+        )
+
+        converted_model = AutoModelForCausalLM.from_pretrained(
+            self.gemma3_text_model_id,
+            gguf_file=self.bf16_gemma3_text_model_id,
+            torch_dtype=torch.float16,
+        )
+
+        converted_state_dict = converted_model.state_dict()
+        original_state_dict = original_model.state_dict()
+
+        for layer_name, original_params in original_state_dict.items():
+            if layer_name in converted_state_dict:
+                self.assertTrue(original_params.shape == converted_state_dict[layer_name].shape)
+                torch.testing.assert_close(original_params, converted_state_dict[layer_name])
+            else:
+                raise ValueError(f"Layer {layer_name} is not presented in GGUF model")
+
+    # Test text backbone conversion for gemma3 vision models
+    @require_read_token
+    @unittest.skipUnless(is_gguf_available("0.16.0"), "test requires gguf version >= 0.16.0")
+    def test_gemma3_vision_weights_conversion_bf16(self):
+        original_model = AutoModelForCausalLM.from_pretrained(
+            self.original_gemma3_vision_model_id,
+            torch_dtype=torch.float16,
+        ).language_model
+
+        converted_model = AutoModelForCausalLM.from_pretrained(
+            self.gemma3_vision_model_id,
+            gguf_file=self.bf16_gemma3_vision_model_id,
             torch_dtype=torch.float16,
         )
 
